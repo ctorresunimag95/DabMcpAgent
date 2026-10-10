@@ -1,0 +1,101 @@
+{
+  "$schema": "https://github.com/Azure/data-api-builder/releases/download/v2.0.12/dab.draft.schema.json",
+  "data-source": {
+    "database-type": "mssql",
+    "connection-string": "@env('MSSQL_CONNECTION_STRING')",
+    "options": {
+      "set-session-context": false
+    }
+  },
+  "runtime": {
+    "rest": {
+      "enabled": true,
+      "path": "/api",
+      "request-body-strict": false
+    },
+    "graphql": {
+      "enabled": true,
+      "path": "/graphql",
+      "allow-introspection": true
+    },
+    "mcp": {
+      "enabled": true,
+      "path": "/mcp"
+    },
+    "host": {
+      "cors": {
+        "origins": [],
+        "allow-credentials": false
+      },
+      "authentication": {
+        "provider": "Unauthenticated"
+      },
+      "mode": "development"
+    },
+    "telemetry": {
+      "open-telemetry": {
+        "enabled": true,
+        "endpoint": "@env('OTEL_EXPORTER_OTLP_ENDPOINT')",
+        "headers": "@env('OTEL_EXPORTER_OTLP_HEADERS')",
+        "service-name": "@env('OTEL_SERVICE_NAME')"
+      }
+    }
+  },
+  "autoentities": {},
+  "entities": {
+    "Products": {
+      "description": "Toy store products with inventory, price, and cost.",
+      "source": {
+        "object": "dbo.Products",
+        "type": "table"
+      },
+      "fields": [
+        {
+          "name": "Id",
+          "description": "Product Id",
+          "primary-key": true
+        },
+        {
+          "name": "Name",
+          "description": "Product name",
+          "primary-key": false
+        },
+        {
+          "name": "Inventory",
+          "description": "Units in stock",
+          "primary-key": false
+        },
+        {
+          "name": "Price",
+          "description": "Retail price",
+          "primary-key": false
+        },
+        {
+          "name": "Cost",
+          "description": "Store cost",
+          "primary-key": false
+        }
+      ],
+      "graphql": {
+        "enabled": true,
+        "type": {
+          "singular": "Products",
+          "plural": "Products"
+        }
+      },
+      "rest": {
+        "enabled": true
+      },
+      "permissions": [
+        {
+          "role": "anonymous",
+          "actions": [
+            {
+              "action": "read"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

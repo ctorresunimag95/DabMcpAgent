@@ -1,0 +1,155 @@
+@page "/analysis"
+@rendermode InteractiveServer
+@inject IHttpClientFactory HttpClientFactory
+@inject IJSRuntime JS
+
+<div class="card">
+    <p class="card-title">Ask for analysis</p>
+    <textarea @bind="query" rows="4"
+              placeholder="e.g. Show total invoice amount by payment method…"></textarea>
+    <button class="btn" @onclick="Submit" disabled="@isLoading">
+        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+        Analyse
+    </button>
+    <button class="btn" @onclick="() => query = string.Empty" disabled="@isLoading">
+        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+        Clear
+    </button>
+</div>
+
+@if (isLoading)
+{
+    <div class="spinner">Thinking…</div>
+}
+
+@if (error is not null)
+{
+    <div class="card report-error">@error</div>
+}
+
+@if (result is not null)
+{
+    <div class="card">
+        <p class="card-title">@result.Chart.Title</p>
+        <div style="position:relative;height:340px">
+            <canvas id="analysis-chart"></canvas>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(result.Summary))
+        {
+            <div class="answer-card" style="margin-top:1rem">@result.Summary</div>
+        }
+
+        @if (result.Usage is not null)
+        {
+            <div class="usage-summary">
+                <span>Tokens used: <strong>@result.Usage.TotalTokens</strong></span>
+                <span>Input: @result.Usage.InputTokens</span>
+                <span>Output: @result.Usage.OutputTokens</span>
+                <span>Est. cost: <strong>$@(((result.Usage.InputTokens ?? 0) / 1_000_000m * 0.40m + (result.Usage.OutputTokens ?? 0) / 1_000_000m * 1.60m).ToString("F6"))</strong></span>
+            </div>
+        }
+
+        <div class="tools-section">
+            <button class="tools-toggle" @onclick="() => showTools = !showTools">
+                <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                @(showTools ? "Hide" : "Show") tools used (@result.Tools.Count)
+            </button>
+            @if (showTools)
+            {
+                <div class="tools-list">
+                    @foreach (var tool in result.Tools)
+                    {
+                        <span class="tool-badge">@tool</span>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private string query = "";
+    private AnalysisResult? result;
+    private bool isLoading;
+    private bool showTools;
+    private string? error;
+    private bool _pendingChart;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_pendingChart && result is not null)
+        {
+            _pendingChart = false;
+            await JS.InvokeVoidAsync("renderAnalysisChart",
+                "analysis-chart",
+                result.Chart.ChartType,
+                result.Chart.Labels,
+                result.Chart.Datasets,
+                result.Chart.Title);
+        }
+    }
+
+    private async Task Submit()
+    {
+        if (string.IsNullOrWhiteSpace(query)) return;
+        isLoading = true;
+        result = null;
+        error = null;
+        showTools = false;
+        try
+        {
+            var client = HttpClientFactory.CreateClient("ai-agent");
+            using var response = await client.PostAsJsonAsync("/api/analyze", new { Text = query });
+            if (!response.IsSuccessStatusCode)
+            {
+                error = response.StatusCode == System.Net.HttpStatusCode.TooManyRequests
+                    ? "Too many requests. Please try again shortly."
+                    : "The analysis service could not process the request.";
+                return;
+            }
+
+            result = await response.Content.ReadFromJsonAsync<AnalysisResult>();
+            if (result is null)
+            {
+                error = "The analysis service returned an invalid response.";
+                return;
+            }
+
+            _pendingChart = true;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private sealed record AnalysisResult(
+        [property: JsonPropertyName("contractVersion")] string ContractVersion,
+        [property: JsonPropertyName("tools")] IReadOnlyList<string> Tools,
+        [property: JsonPropertyName("chart")] ChartSpec Chart,
+        [property: JsonPropertyName("summary")] string Summary,
+        [property: JsonPropertyName("usage")] TokenUsage? Usage);
+
+    private sealed record ChartSpec(
+        [property: JsonPropertyName("chartType")] string ChartType,
+        [property: JsonPropertyName("title")] string Title,
+        [property: JsonPropertyName("labels")] IReadOnlyList<string> Labels,
+        [property: JsonPropertyName("datasets")] IReadOnlyList<ChartDataset> Datasets);
+
+    private sealed record ChartDataset(
+        [property: JsonPropertyName("label")] string Label,
+        [property: JsonPropertyName("data")] IReadOnlyList<double> Data);
+
+    private sealed record TokenUsage(
+        [property: JsonPropertyName("inputTokens")] long? InputTokens,
+        [property: JsonPropertyName("outputTokens")] long? OutputTokens,
+        [property: JsonPropertyName("totalTokens")] long? TotalTokens);
+}

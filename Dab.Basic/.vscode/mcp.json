@@ -1,0 +1,16 @@
+{
+	"servers": {
+		"sql-mcp-server": {
+			"type": "stdio",
+			"command": "dab",
+			"args": [
+				"start",
+				"--mcp-stdio",
+				"role:anonymous",
+				"--config",
+				"${workspaceFolder}/dab-config.json"
+			]
+		}
+	},
+	"inputs": []
+}

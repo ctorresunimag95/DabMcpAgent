@@ -1,0 +1,224 @@
+{
+  "$schema": "https://github.com/Azure/data-api-builder/releases/download/v2.0.12/dab.draft.schema.json",
+  "data-source": {
+    "database-type": "mssql",
+    "connection-string": "@env('ConnectionStrings__LudamoInvoiceDb')",
+    "options": {
+      "set-session-context": false
+    }
+  },
+  "runtime": {
+    "rest": {
+      "enabled": true,
+      "path": "/api",
+      "request-body-strict": false
+    },
+    "graphql": {
+      "enabled": true,
+      "path": "/graphql",
+      "allow-introspection": true
+    },
+    "mcp": {
+      "enabled": true,
+      "path": "/mcp",
+      "description": "Read-only invoice data service. Use it only to discover and retrieve invoice records from the Invoice entity."
+    },
+    "host": {
+      "cors": {
+        "origins": [],
+        "allow-credentials": false
+      },
+      "authentication": {
+        "provider": "Unauthenticated"
+      },
+      "mode": "development"
+    },
+    "telemetry": {
+      "open-telemetry": {
+        "enabled": true,
+        "endpoint": "@env('OTEL_EXPORTER_OTLP_ENDPOINT')",
+        "headers": "@env('OTEL_EXPORTER_OTLP_HEADERS')",
+        "service-name": "@env('OTEL_SERVICE_NAME')"
+      }
+    }
+  },
+  "autoentities": {},
+  "entities": {
+    "Customer": {
+      "description": "A customer or organization that can be billed.",
+      "source": {
+        "object": "dbo.Customers",
+        "type": "table"
+      },
+      "fields": [
+        {
+          "name": "Id",
+          "description": "Unique numeric identifier for the customer.",
+          "primary-key": true
+        },
+        {
+          "name": "Name",
+          "description": "Name of the customer or organization."
+        }
+      ],
+      "relationships": {
+        "invoices": {
+          "cardinality": "many",
+          "target.entity": "Invoice",
+          "source.fields": ["Id"],
+          "target.fields": ["CustomerId"]
+        }
+      },
+      "graphql": {
+        "enabled": true,
+        "type": {
+          "singular": "Customer",
+          "plural": "Customers"
+        }
+      },
+      "rest": {
+        "enabled": true
+      },
+      "permissions": [
+        {
+          "role": "anonymous",
+          "actions": [
+            {
+              "action": "read"
+            }
+          ]
+        }
+      ]
+    },
+    "SalesRep": {
+      "description": "A sales representative assigned to customer accounts and invoices.",
+      "source": {
+        "object": "dbo.SalesReps",
+        "type": "table"
+      },
+      "fields": [
+        {
+          "name": "Id",
+          "description": "Unique numeric identifier for the sales representative.",
+          "primary-key": true
+        },
+        {
+          "name": "Name",
+          "description": "Full name of the sales representative."
+        },
+        {
+          "name": "Region",
+          "description": "Region (Country/Continent) the representative is assigned to."
+        }
+      ],
+      "relationships": {
+        "invoices": {
+          "cardinality": "many",
+          "target.entity": "Invoice",
+          "source.fields": ["Id"],
+          "target.fields": ["SalesRepId"]
+        }
+      },
+      "graphql": {
+        "enabled": true,
+        "type": {
+          "singular": "SalesRep",
+          "plural": "SalesReps"
+        }
+      },
+      "rest": {
+        "enabled": true
+      },
+      "permissions": [
+        {
+          "role": "anonymous",
+          "actions": [
+            {
+              "action": "read"
+            }
+          ]
+        }
+      ]
+    },
+    "Invoice": {
+      "description": "A customer billing invoice. Each record contains the invoice identifier, customer FK, sales rep FK, issued and due dates, monetary amount, currency, payment status, and payment method.",
+      "source": {
+        "object": "dbo.Invoices",
+        "type": "table"
+      },
+      "fields": [
+        {
+          "name": "InvoiceId",
+          "description": "Unique numeric identifier for the invoice.",
+          "primary-key": true
+        },
+        {
+          "name": "CustomerId",
+          "description": "Foreign key referencing the customer billed by this invoice."
+        },
+        {
+          "name": "SalesRepId",
+          "description": "Foreign key referencing the sales representative assigned to this invoice."
+        },
+        {
+          "name": "InvoiceDate",
+          "description": "Date and time when the invoice was issued."
+        },
+        {
+          "name": "DueDate",
+          "description": "Date and time when payment is due."
+        },
+        {
+          "name": "Amount",
+          "description": "Total invoice amount in the currency specified by Currency; stored as a decimal value."
+        },
+        {
+          "name": "Currency",
+          "description": "ISO 4217 currency code for Amount, for example USD, EUR, or GBP."
+        },
+        {
+          "name": "Status",
+          "description": "Current payment lifecycle status, such as Paid, Pending, Overdue, Draft, Cancelled, Approved, or Rejected."
+        },
+        {
+          "name": "PaymentMethod",
+          "description": "Payment method used or expected for the invoice, such as Credit Card, Bank Transfer, Wire Transfer, or ACH."
+        }
+      ],
+      "relationships": {
+        "customer": {
+          "cardinality": "one",
+          "target.entity": "Customer",
+          "source.fields": ["CustomerId"],
+          "target.fields": ["Id"]
+        },
+        "salesRep": {
+          "cardinality": "one",
+          "target.entity": "SalesRep",
+          "source.fields": ["SalesRepId"],
+          "target.fields": ["Id"]
+        }
+      },
+      "graphql": {
+        "enabled": true,
+        "type": {
+          "singular": "Invoice",
+          "plural": "Invoices"
+        }
+      },
+      "rest": {
+        "enabled": true
+      },
+      "permissions": [
+        {
+          "role": "anonymous",
+          "actions": [
+            {
+              "action": "read"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

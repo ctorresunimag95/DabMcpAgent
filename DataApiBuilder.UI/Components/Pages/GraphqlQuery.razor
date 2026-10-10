@@ -1,0 +1,287 @@
+@page "/graphql-query"
+@rendermode InteractiveServer
+@using System.Globalization
+@using DataApiBuilder.UI.Invoices
+
+@if (_schemaError is not null)
+{
+    <div class="error-msg">Schema load failed: @_schemaError</div>
+}
+else if (_fields is null)
+{
+    <div class="spinner">Loading schema…</div>
+}
+else
+{
+    <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+            <div>
+                <p class="card-title" style="margin:0">Invoice report</p>
+                <p class="report-subtitle">Explore invoice activity with customer and sales representative context.</p>
+            </div>
+            <button class="btn-sm" @onclick="ReloadSchema" disabled="@_reloading">
+                ↻ @(_reloading ? "Reloading…" : "Reload schema")
+            </button>
+        </div>
+
+        <div class="qb-section">
+            <span class="qb-label">Report columns</span>
+            <p class="report-hint">Choose the business fields to show. Technical identifiers are excluded.</p>
+            <div class="report-field-groups">
+                @foreach (var group in DisplayFieldGroups)
+                {
+                    <div class="report-field-group">
+                        <span class="report-field-group-title">@group.Key</span>
+                        <div class="qb-fields">
+                            @foreach (var f in group)
+                            {
+                                <label class="qb-check">
+                                    <input type="checkbox" @bind="f.Selected" />
+                                    @f.Label
+                                </label>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="qb-section">
+            <div class="qb-row">
+                <span class="qb-label" style="margin-bottom:0">Filters</span>
+                <button class="btn-sm" @onclick="AddFilter">+ Add</button>
+            </div>
+            @foreach (var (filter, idx) in _filters.Select((f, i) => (f, i)))
+            {
+                var fd = FindField(filter.Field);
+                <div class="qb-filter-row">
+                    <select @bind="filter.Field" @bind:after="() => OnFilterFieldChanged(filter)">
+                        @foreach (var f in _fields)
+                        {
+                            <option value="@f.Name">@f.Label</option>
+                        }
+                    </select>
+                    <select @bind="filter.Op" @bind:after="MarkReportStale">
+                        @foreach (var op in GetOps(fd))
+                        {
+                            <option value="@op">@op</option>
+                        }
+                    </select>
+                    @if (fd.Kind == FieldKind.Enum && fd.EnumValues.Length > 0)
+                    {
+                        <select @bind="filter.Value" @bind:after="MarkReportStale">
+                            <option value="">— select —</option>
+                            @foreach (var v in fd.EnumValues)
+                            {
+                                <option value="@v">@v</option>
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        <input type="@(fd.Kind == FieldKind.Number ? "number" : fd.Kind == FieldKind.Date ? "date" : "text")"
+                               @bind="filter.Value" @bind:after="MarkReportStale" placeholder="value" />
+                    }
+                    <button class="btn-remove" @onclick="() => RemoveFilter(idx)">×</button>
+                </div>
+            }
+        </div>
+
+        <div class="qb-section">
+            <div class="qb-row">
+                <span class="qb-label" style="margin-bottom:0">Order by</span>
+                <select @bind="_orderField" @bind:after="MarkReportStale">
+                    <option value="">(none)</option>
+                    @foreach (var f in _fields.Where(f => !f.Name.Contains('.')))
+                    {
+                        <option value="@f.Name">@f.Label</option>
+                    }
+                </select>
+                @if (!string.IsNullOrEmpty(_orderField))
+                {
+                    <select @bind="_orderDir" @bind:after="MarkReportStale">
+                        <option value="ASC">Ascending</option>
+                        <option value="DESC">Descending</option>
+                    </select>
+                }
+            </div>
+        </div>
+
+        <button class="btn" @onclick="RunQuery" disabled="@_loading">
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                      d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Load report
+        </button>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="card report-status"><div class="spinner">Loading @_loadedCount invoices…</div><p>Retrieving all matching report rows in the background.</p></div>
+    }
+
+    @if (_error is not null)
+    {
+        <div class="error-msg">@_error</div>
+    }
+
+    @if (_rows is not null)
+    {
+        <div class="card">
+            <p class="card-title">Invoice report — @_rows.Count @(_rows.Count == 1 ? "row" : "rows")</p>
+            @if (_reportReachedLimit)
+            {
+                <div class="report-warning">The report reached the 5,000-invoice safety limit and is incomplete. Refine the filters before analyzing it.</div>
+            }
+            else if (_reportIsStale)
+            {
+                <div class="report-stale">The filters or sorting changed. Load the report again before analyzing the new selection.</div>
+            }
+            else
+            {
+                <p class="report-complete">Complete report loaded — all matching invoices are included below.</p>
+            }
+            @if (_rows.Count == 0)
+            {
+                <p style="color:var(--text-muted);margin:0">No results matched the query.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="result-table">
+                        <thead>
+                            <tr>
+                                @foreach (var f in _selectedSnapshot)
+                                {
+                                    <th>@f.Label</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in _rows)
+                            {
+                                <tr>
+                                    @foreach (var f in _selectedSnapshot)
+                                    {
+                                        <td>@GetCell(row, f.Name)</td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+
+        @if (_rows.Count > 0 && _reportIsComplete && !_reportIsStale)
+        {
+            <div class="card">
+                <p class="card-title">Compare invoice performance</p>
+                <p class="analysis-note">Build an answer from all @_rows.Count invoices in the complete report.</p>
+                @if (AnalysisSuggestions.Any())
+                {
+                    <div class="analysis-suggestions">
+                        <span class="qb-label">Try a question</span>
+                        <div class="suggestion-list">
+                            @foreach (var suggestion in AnalysisSuggestions)
+                            {
+                                <button class="suggestion-button" @onclick="() => ApplySuggestion(suggestion)">@suggestion.Question</button>
+                            }
+                        </div>
+                    </div>
+                }
+                <div class="qb-section">
+                    <p class="analysis-sentence">Compare <strong>@AggregateDescription</strong> by a business dimension, then optionally split the comparison.</p>
+                    <div class="qb-row">
+                        <span class="qb-label" style="margin-bottom:0">Compare by</span>
+                        <select @bind="_groupField">
+                            @foreach (var f in AnalysisFields)
+                            {
+                                <option value="@f.Name">@f.Label</option>
+                            }
+                        </select>
+                        <span class="qb-label" style="margin-bottom:0;margin-left:.75rem">Split by</span>
+                        <select @bind="_seriesField">
+                            <option value="">(none)</option>
+                            @foreach (var f in AnalysisFields.Where(f => f.Name != _groupField))
+                            {
+                                <option value="@f.Name">@f.Label</option>
+                            }
+                        </select>
+                        <span class="qb-label" style="margin-bottom:0;margin-left:.75rem">Calculation</span>
+                        <select @bind="_agg" @bind:after="EnsureMeasureField">
+                            <option value="@Agg.Count">Count</option>
+                            <option value="@Agg.Sum">Sum</option>
+                            <option value="@Agg.Average">Average</option>
+                            <option value="@Agg.Min">Min</option>
+                            <option value="@Agg.Max">Max</option>
+                        </select>
+                        @if (_agg != Agg.Count)
+                        {
+                            <span class="qb-label" style="margin-bottom:0;margin-left:.75rem">of</span>
+                            <select @bind="_measureField">
+                                @foreach (var f in NumericAnalysisFields)
+                                {
+                                    <option value="@f.Name">@f.Label</option>
+                                }
+                            </select>
+                        }
+                    </div>
+                    <div class="qb-row analysis-controls">
+                        <span class="qb-label" style="margin-bottom:0">Keep groups</span>
+                        <select @bind="_comparison">
+                            <option value="none">with any value</option>
+                            <option value="gt">greater than</option>
+                            <option value="gte">greater than or equal to</option>
+                            <option value="lt">less than</option>
+                            <option value="lte">less than or equal to</option>
+                            <option value="eq">equal to</option>
+                        </select>
+                        @if (_comparison != "none")
+                        {
+                            <input type="number" step="any" @bind="_threshold" placeholder="threshold" />
+                        }
+                        <span class="qb-label" style="margin-bottom:0;margin-left:.75rem">Chart</span>
+                        <select @bind="_chartType">
+                            <option value="bar">Bar</option>
+                            <option value="line">Line</option>
+                            <option value="doughnut">Doughnut</option>
+                        </select>
+                        <button class="btn-sm" style="margin-left:.75rem" @onclick="Analyze">Analyze</button>
+                        <button class="btn-sm" @onclick="ResetAnalysis">Reset</button>
+                    </div>
+                </div>
+
+                @if (_aggError is not null)
+                {
+                    <div class="error-msg">@_aggError</div>
+                }
+                else if (_aggResult is not null)
+                {
+                    @if (_aggResult.Count == 0)
+                    {
+                        <p style="color:var(--text-muted);margin:0">No groups meet the selected comparison.</p>
+                    }
+                    else
+                    {
+                        <p class="analysis-result-title">@AnalysisTitle</p>
+                        <div class="chart-wrap"><canvas id="cmp-chart"></canvas></div>
+                        <div class="table-wrap">
+                            <table class="result-table">
+                                <thead><tr><th>@FindField(_groupField).Label</th>@if (!string.IsNullOrEmpty(_seriesField)) { <th>@FindField(_seriesField).Label</th> }<th>@_aggLabel</th><th>Source rows</th></tr></thead>
+                                <tbody>
+                                    @foreach (var bucket in _aggResult)
+                                    {
+                                        <tr><td>@bucket.Group</td>@if (!string.IsNullOrEmpty(_seriesField)) { <td>@bucket.Series</td> }<td>@bucket.Value.ToString("0.##", CultureInfo.InvariantCulture)</td><td>@bucket.RowCount</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                }
+            </div>
+        }
+    }
+}

@@ -1,0 +1,6 @@
+<Solution>
+    <Project Path="DataApiBuilder.AiAgent/DataApiBuilder.AiAgent.csproj" />
+    <Project Path="DataApiBuilder.AppHost/DataApiBuilder.AppHost.csproj" />
+    <Project Path="DataApiBuilder.UI/DataApiBuilder.UI.csproj" />
+    <Project Path="DataApiBuilder.ServiceDefaults/DataApiBuilder.ServiceDefaults.csproj" />
+</Solution>

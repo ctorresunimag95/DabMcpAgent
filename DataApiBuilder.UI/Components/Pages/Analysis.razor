@@ -110,9 +110,16 @@
             using var response = await client.PostAsJsonAsync("/api/analyze", new { Text = query });
             if (!response.IsSuccessStatusCode)
             {
-                error = response.StatusCode == System.Net.HttpStatusCode.TooManyRequests
-                    ? "Too many requests. Please try again shortly."
-                    : "The analysis service could not process the request.";
+                error = response.StatusCode switch
+                {
+                    System.Net.HttpStatusCode.TooManyRequests =>
+                        "Too many requests. Please try again shortly.",
+                    (System.Net.HttpStatusCode)499 =>
+                        "The analysis was canceled before it completed.",
+                    System.Net.HttpStatusCode.GatewayTimeout =>
+                        "The analysis service timed out while waiting for the AI model.",
+                    _ => "The analysis service could not process the request."
+                };
                 return;
             }
 
@@ -124,6 +131,14 @@
             }
 
             _pendingChart = true;
+        }
+        catch (OperationCanceledException)
+        {
+            error = "The analysis was canceled before it completed.";
+        }
+        catch (HttpRequestException)
+        {
+            error = "The analysis service could not be reached.";
         }
         finally
         {

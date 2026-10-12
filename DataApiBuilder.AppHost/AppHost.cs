@@ -25,17 +25,25 @@ var dab = builder.AddDataAPIBuilder("dab-source", ["../DataApiBuilder.App/dab-co
 #endregion
 
 #region AI Agent
-var modelEndpoint = builder.AddParameter("ModelEndpoint");
-var modelApiKey = builder.AddParameter("ModelApiKey", secret: true);
-var modelDeploymentName = builder.AddParameter("ModelDeploymentName");
+// var modelEndpoint = builder.AddParameter("ModelEndpoint");
+// var modelApiKey = builder.AddParameter("ModelApiKey", secret: true);
+// var modelDeploymentName = builder.AddParameter("ModelDeploymentName");
 
 var dabUri = dab.Resource.UriExpression;
 
+var ollama = builder.AddOllama("ollama")
+    .WithDataVolume("ollama-data-volume")
+    .WithOpenWebUI();
+var ollamaEndpoint = ollama.Resource.UriExpression;
+var ollamaModel = ollama.AddModel("llama3.2");
+
 var aiAgent = builder.AddProject<Projects.DataApiBuilder_AiAgent>("ai-agent")
-    .WithEnvironment("AzureFoundry__ApiKey", modelApiKey)
-    .WithEnvironment("AzureFoundry__Endpoint", modelEndpoint)
-    .WithEnvironment("AzureFoundry__DeploymentName", modelDeploymentName)
+    //.WithEnvironment("AzureFoundry__ApiKey", modelApiKey)
+    //.WithEnvironment("AzureFoundry__Endpoint", modelEndpoint)
+    //.WithEnvironment("AzureFoundry__DeploymentName", modelDeploymentName)
     .WithEnvironment("DabMcp__Endpoint", $"{dabUri}/mcp")
+    .WithEnvironment("Ollama__Endpoint", ollamaEndpoint)
+    .WithEnvironment("Ollama__Model", ollamaModel.Resource.ModelName)
     .WaitFor(dab);
 #endregion
 

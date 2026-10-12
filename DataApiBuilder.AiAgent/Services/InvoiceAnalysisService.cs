@@ -1,6 +1,7 @@
 using DataApiBuilder.AiAgent.Extensions;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using OllamaSharp;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -20,11 +21,12 @@ public sealed class InvoiceAnalysisService
     public async Task<InvoiceAnalysisResult> QueryAsync(string text, CancellationToken cancellationToken)
     {
         var mcpSession = _mcpTools.Session;
-        var response = await _agent.RunAsync(
+        var response = await _agent.RunAsync<AnalysisAgentPayload>(
             text,
             options: new ChatClientAgentRunOptions(
                 new ChatOptions
                 {
+                    ResponseFormat = ChatResponseFormat.ForJsonSchema<AnalysisAgentPayload>(),
                     Tools = mcpSession.Tools.ToList(),
                     MaxOutputTokens = 1500
                 }),
@@ -37,7 +39,9 @@ public sealed class InvoiceAnalysisService
             .Distinct(StringComparer.Ordinal)
             .ToArray();
 
-        var payload = ParsePayload(response.Text);
+        // var payload = ParsePayload(response.Text);
+        var payload = response.Result;
+
         var usage = response.Usage;
         return new InvoiceAnalysisResult(
             "1.0",

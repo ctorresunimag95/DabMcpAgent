@@ -88,14 +88,29 @@
             using var response = await client.PostAsJsonAsync("/api/query", new { Text = query });
             if (!response.IsSuccessStatusCode)
             {
-                error = response.StatusCode == System.Net.HttpStatusCode.TooManyRequests
-                    ? "Too many requests. Please try again shortly."
-                    : "The query service could not process the request.";
+                error = response.StatusCode switch
+                {
+                    System.Net.HttpStatusCode.TooManyRequests =>
+                        "Too many requests. Please try again shortly.",
+                    (System.Net.HttpStatusCode)499 =>
+                        "The query was canceled before it completed.",
+                    System.Net.HttpStatusCode.GatewayTimeout =>
+                        "The query service timed out while waiting for the AI model.",
+                    _ => "The query service could not process the request."
+                };
                 return;
             }
 
             result = await response.Content.ReadFromJsonAsync<QueryResult>();
             if (result is null) error = "The query service returned an invalid response.";
+        }
+        catch (OperationCanceledException)
+        {
+            error = "The query was canceled before it completed.";
+        }
+        catch (HttpRequestException)
+        {
+            error = "The query service could not be reached.";
         }
         finally
         {

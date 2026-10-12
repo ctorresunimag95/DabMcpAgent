@@ -89,28 +89,55 @@ public static class InvoiceAgentServiceCollectionExtensions
     {
         services.Configure<AzureFoundryOptions>(configuration.GetSection("AzureFoundry"));
         services.Configure<DabMcpOptions>(configuration.GetSection("DabMcp"));
+
+        // var azureFoundryOptions = configuration.GetSection("AzureFoundry").Get<AzureFoundryOptions>() ?? new AzureFoundryOptions();
+        // if (!string.IsNullOrWhiteSpace(azureFoundryOptions.Endpoint) &&
+        //     !string.IsNullOrWhiteSpace(azureFoundryOptions.ApiKey) &&
+        //     !string.IsNullOrWhiteSpace(azureFoundryOptions.DeploymentName))
+        // {
+        //     services.AddSingleton(sp =>
+        //     {
+        //         var client = new AzureOpenAIClient(
+        //             new Uri(azureFoundryOptions.Endpoint),
+        //             new AzureKeyCredential(azureFoundryOptions.ApiKey));
+
+        //         return client
+        //             .GetChatClient(azureFoundryOptions.DeploymentName)
+        //             .AsIChatClient()
+        //             .AsBuilder()
+        //             .UseOpenTelemetry(sp.GetRequiredService<ILoggerFactory>(), "DataApiBuilder.AiAgent")
+        //             .Build();
+        //     });
+        // }
+
+        services.AddSingleton(sp =>
+        {
+            var endpoint = configuration.GetValue<string>("Ollama:Endpoint");
+            var model = configuration.GetValue<string>("Ollama:Model");
+
+            if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var ollamaUri))
+            {
+                throw new InvalidOperationException(
+                    "Ollama:Endpoint must be an absolute HTTP or HTTPS URL.");
+            }
+
+            if (string.IsNullOrWhiteSpace(model))
+            {
+                throw new InvalidOperationException(
+                    "Ollama:Model must identify an Ollama model.");
+            }
+
+            IChatClient chatClient = new OllamaSharp.OllamaApiClient(ollamaUri, model);
+            return chatClient
+                .AsBuilder()
+                .UseOpenTelemetry(
+                    sp.GetRequiredService<ILoggerFactory>(),
+                    "DataApiBuilder.AiAgent")
+                .Build();
+        });
+
         services.AddSingleton<DabMcpToolSessionFactory>();
         services.AddSingleton<DabMcpToolSessionProvider>();
-
-        var azureFoundryOptions = configuration.GetSection("AzureFoundry").Get<AzureFoundryOptions>() ?? new AzureFoundryOptions();
-        if (!string.IsNullOrWhiteSpace(azureFoundryOptions.Endpoint) &&
-            !string.IsNullOrWhiteSpace(azureFoundryOptions.ApiKey) &&
-            !string.IsNullOrWhiteSpace(azureFoundryOptions.DeploymentName))
-        {
-            services.AddSingleton(sp =>
-            {
-                var client = new AzureOpenAIClient(
-                    new Uri(azureFoundryOptions.Endpoint),
-                    new AzureKeyCredential(azureFoundryOptions.ApiKey));
-
-                return client
-                    .GetChatClient(azureFoundryOptions.DeploymentName)
-                    .AsIChatClient()
-                    .AsBuilder()
-                    .UseOpenTelemetry(sp.GetRequiredService<ILoggerFactory>(), "DataApiBuilder.AiAgent")
-                    .Build();
-            });
-        }
 
         services.AddAIAgent(InvoiceAgentName, Instructions);
         services.AddAIAgent(AnalysisAgentName, AnalysisInstructions);

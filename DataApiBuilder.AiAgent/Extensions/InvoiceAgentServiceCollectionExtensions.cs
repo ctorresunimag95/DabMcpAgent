@@ -18,7 +18,7 @@ public static class InvoiceAgentServiceCollectionExtensions
 
         Data access rules:
         1. Use `sql-mcp-server` for invoice data retrieval.
-        2. Available entities: Invoice, Customer, SalesRep.
+        2. Available entity: Invoice. It is a flat table containing invoice, customer, and sales representative fields.
         3. When calling read_records, use only exact column names listed in the schema below.
         4. Never create, infer, alias, or hallucinate column names.
         5. If a user asks for a field that does not exist, explain and proceed with the closest valid fields.
@@ -29,9 +29,7 @@ public static class InvoiceAgentServiceCollectionExtensions
         - Use `read_records` to retrieve records based on filters and projections.
 
         Schemas:
-        - Invoices: InvoiceId, CustomerId, SalesRepId, Amount, Status, InvoiceDate, DueDate, PaymentMethod
-        - Customers: Id, Name
-        - SalesReps: Id, Name, Region
+        - Invoice: InvoiceId, CustomerId, CustomerName, SalesRepId, SalesRepName, SalesRepRegion, Amount, Currency, Status, InvoiceDate, DueDate, PaymentMethod
 
         Query behavior:
         - Prefer precise filtering and projection; return only relevant records and fields.
@@ -49,7 +47,7 @@ public static class InvoiceAgentServiceCollectionExtensions
 
         Data access rules:
         1. Use `sql-mcp-server` for invoice data retrieval.
-        2. Available entities: Invoice, Customer, SalesRep.
+        2. Available entity: Invoice. It is a flat table containing invoice, customer, and sales representative fields.
         3. When calling read_records, use only exact column names listed in the schema below.
         4. Never create, infer, alias, or hallucinate column names.
         5. Do not perform write/update/delete operations; this tool is read-only.
@@ -59,9 +57,7 @@ public static class InvoiceAgentServiceCollectionExtensions
         - Use `read_records` to retrieve records based on filters and projections.
 
         Schemas:
-        - Invoices: InvoiceId, CustomerId, SalesRepId, Amount, Status, InvoiceDate, DueDate, PaymentMethod
-        - Customers: Id, Name
-        - SalesReps: Id, Name, Region
+        - Invoice: InvoiceId, CustomerId, CustomerName, SalesRepId, SalesRepName, SalesRepRegion, Amount, Currency, Status, InvoiceDate, DueDate, PaymentMethod
 
         Query behavior:
         - Retrieve and aggregate real data via MCP tools. Never fabricate numbers.

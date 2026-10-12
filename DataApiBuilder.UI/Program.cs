@@ -9,6 +9,7 @@ builder.Services.AddRazorComponents()
 builder.Services.AddHttpClient("ai-agent", client =>
 {
     client.BaseAddress = new Uri("https+http://ai-agent");
+    client.Timeout = TimeSpan.FromMinutes(10);
 }).AddServiceDiscovery();
 
 builder.Services.AddSingleton<DataApiBuilder.UI.SchemaCache>();
